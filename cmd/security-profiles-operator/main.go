@@ -62,6 +62,7 @@ import (
 	"sigs.k8s.io/security-profiles-operator/internal/pkg/daemon/seccompprofile"
 	"sigs.k8s.io/security-profiles-operator/internal/pkg/daemon/selinuxprofile"
 	nodestatus "sigs.k8s.io/security-profiles-operator/internal/pkg/manager/nodestatus"
+	nodewatcher "sigs.k8s.io/security-profiles-operator/internal/pkg/manager/nodewatcher"
 	"sigs.k8s.io/security-profiles-operator/internal/pkg/manager/recordingmerger"
 	"sigs.k8s.io/security-profiles-operator/internal/pkg/manager/spod"
 	"sigs.k8s.io/security-profiles-operator/internal/pkg/manager/spod/bindata"
