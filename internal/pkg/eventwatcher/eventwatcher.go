@@ -53,10 +53,11 @@ func NewEventWatcher(clientset *kubernetes.Clientset, resource string, eventType
 func (w *EventWatcher) Run(ctx context.Context) error {
 	informerFactory := informers.NewSharedInformerFactoryWithOptions(w.clientset, 0, informers.WithNamespace(v1.NamespaceAll))
 	resource := schema.GroupVersionResource{Group: "", Version: "v1", Resource: w.resource}
-	informer := informerFactory.ForResource(resource)
+	genericInformer, _ := informerFactory.ForResource(resource)
+	informer := genericInformer.Informer()
 
 	informer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		w.eventType: func(obj interface{}) {
+		*w.eventType: func(obj interface{}) {
 			object, ok := obj.(*unstructured.Unstructured)
 			if !ok {
 				return
@@ -69,9 +70,8 @@ func (w *EventWatcher) Run(ctx context.Context) error {
 
 	informerFactory.Start(ctx.Done())
 	defer func() {
-		informers := informerFactory.Informers()
-		for _, informer := range informers {
-			informer.Informer().Stop()
+		for _, startedInformer := range informerFactory.WaitForCacheSync(ctx.Done()) {
+			startedInformer.Stop()
 		}
 	}()
 
