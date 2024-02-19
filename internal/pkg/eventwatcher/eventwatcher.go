@@ -35,12 +35,12 @@ type EventCallback func(object *unstructured.Unstructured)
 type EventWatcher struct {
 	clientset *kubernetes.Clientset
 	resource  string
-	eventType *string
+	eventType string
 	callback  EventCallback
 }
 
 // NewEventWatcher creates a new EventWatcher.
-func NewEventWatcher(clientset *kubernetes.Clientset, resource string, eventType *string, callback EventCallback) *EventWatcher {
+func NewEventWatcher(clientset *kubernetes.Clientset, resource string, eventType string, callback EventCallback) *EventWatcher {
 	return &EventWatcher{
 		clientset: clientset,
 		resource:  resource,
@@ -57,7 +57,7 @@ func (w *EventWatcher) Run(ctx context.Context) error {
 	informer := genericInformer.Informer()
 
 	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		*w.eventType: func(obj interface{}) {
+		w.eventType: func(obj interface{}) {
 			object, ok := obj.(*unstructured.Unstructured)
 			if !ok {
 				return
