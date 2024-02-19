@@ -73,8 +73,8 @@ func (w *EventWatcher) Run(ctx context.Context) error {
 
 	informerFactory.Start(ctx.Done())
 	defer func() {
-		for _, informer := range informerFactory.WaitForCacheSync(ctx.Done()) {
-			informer.Stop()
+		for _, startedInformer := range informerFactory.WaitForCacheSync(ctx.Done()) {
+			startedInformer.Stop()
 		}
 	}()
 
