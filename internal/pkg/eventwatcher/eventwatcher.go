@@ -22,6 +22,7 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
@@ -34,7 +35,7 @@ type EventCallback func(object *unstructured.Unstructured)
 type EventWatcher struct {
 	clientset *kubernetes.Clientset
 	resource  string
-	eventType string
+	eventType *string
 	callback  EventCallback
 }
 
@@ -51,7 +52,8 @@ func NewEventWatcher(clientset *kubernetes.Clientset, resource string, eventType
 // Run starts the event watcher and blocks until an error occurs.
 func (w *EventWatcher) Run(ctx context.Context) error {
 	informerFactory := informers.NewSharedInformerFactoryWithOptions(w.clientset, 0, informers.WithNamespace(v1.NamespaceAll))
-	informer := informerFactory.ForResource(w.resource)
+	resource := schema.GroupVersionResource{Group: "", Version: "v1", Resource: w.resource}
+	informer := informerFactory.ForResource(resource)
 
 	informer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		w.eventType: func(obj interface{}) {
@@ -66,7 +68,12 @@ func (w *EventWatcher) Run(ctx context.Context) error {
 	})
 
 	informerFactory.Start(ctx.Done())
-	defer informerFactory.Stop()
+	defer func() {
+		informers := informerFactory.Informers()
+		for _, informer := range informers {
+			informer.Informer().Stop()
+		}
+	}()
 
 	<-ctx.Done()
 	return fmt.Errorf("EventWatcher: context canceled")
