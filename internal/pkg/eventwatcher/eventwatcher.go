@@ -52,7 +52,6 @@ func NewEventWatcher(clientset *kubernetes.Clientset, resource string, eventType
 func (w *EventWatcher) handleEvent(obj interface{}) {
 	object, ok := obj.(*unstructured.Unstructured)
 	if !ok {
-		// Handle the case where the object is not an unstructured.Unstructured
 		return
 	}
 
@@ -74,7 +73,7 @@ func (w *EventWatcher) Run(ctx context.Context) error {
 
 	informerFactory.Start(ctx.Done())
 	defer func() {
-		for _, informernformer := range informerFactory.WaitForCacheSync(ctx.Done()) {
+		for _, informer := range informerFactory.WaitForCacheSync(ctx.Done()) {
 			informer.Stop()
 		}
 	}()
