@@ -24,6 +24,7 @@ import (
 
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -32,6 +33,7 @@ import (
 	"sigs.k8s.io/security-profiles-operator/api/profilerecording/v1alpha1"
 	secprofnodestatusv1alpha1 "sigs.k8s.io/security-profiles-operator/api/secprofnodestatus/v1alpha1"
 	"sigs.k8s.io/security-profiles-operator/internal/pkg/config"
+	"sigs.k8s.io/security-profiles-operator/internal/pkg/eventwatcher"
 	"sigs.k8s.io/security-profiles-operator/internal/pkg/util"
 )
 
@@ -44,6 +46,7 @@ type StatusClient struct {
 	nodeName        string
 	finalizerString string
 	client          client.Client
+	watcher         *eventwatcher.EventWatcher
 }
 
 func NewForProfile(pol profilebase.SecurityProfileBase, c client.Client) (*StatusClient, error) {
@@ -51,11 +54,22 @@ func NewForProfile(pol profilebase.SecurityProfileBase, c client.Client) (*Statu
 	if !ok {
 		return nil, errors.New("cannot determine node name")
 	}
+
+	watcher, err := eventwatcher.NewEventWatcher(c, "nodes", "Deleted", func(obj *unstructured.Unstructured) {
+		fmt.Printf("Node %s has been deleted\n", obj.GetName())
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	go watcher.Run(context.Background())
+
 	return &StatusClient{
 		pol:             pol,
 		nodeName:        nodeName,
 		finalizerString: getFinalizerString(pol, nodeName),
 		client:          c,
+		watcher:         watcher,
 	}, nil
 }
 
@@ -169,6 +183,7 @@ func (nsf *StatusClient) Remove(ctx context.Context, c client.Client) error {
 		return fmt.Errorf("cannot remove nodeStatus for %s: %w", nsf.pol.GetName(), err)
 	}
 
+	nsf.watcher.Stop() // Stop the EventWatcher
 	return nil
 }
 
