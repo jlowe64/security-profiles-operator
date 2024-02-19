@@ -40,7 +40,7 @@ type EventWatcher struct {
 }
 
 // NewEventWatcher creates a new EventWatcher.
-func NewEventWatcher(clientset *kubernetes.Clientset, resource string, eventType string, callback EventCallback) *EventWatcher {
+func NewEventWatcher(clientset *kubernetes.Clientset, resource string, eventType *string, callback EventCallback) *EventWatcher {
 	return &EventWatcher{
 		clientset: clientset,
 		resource:  resource,
@@ -56,7 +56,7 @@ func (w *EventWatcher) Run(ctx context.Context) error {
 	genericInformer, _ := informerFactory.ForResource(resource)
 	informer := genericInformer.Informer()
 
-	informer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		*w.eventType: func(obj interface{}) {
 			object, ok := obj.(*unstructured.Unstructured)
 			if !ok {
@@ -70,8 +70,8 @@ func (w *EventWatcher) Run(ctx context.Context) error {
 
 	informerFactory.Start(ctx.Done())
 	defer func() {
-		for _, startedInformer := range informerFactory.WaitForCacheSync(ctx.Done()) {
-			startedInformer.Stop()
+		for _, informernformer := range informerFactory.WaitForCacheSync(ctx.Done()) {
+			informer.Stop()
 		}
 	}()
 
