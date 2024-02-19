@@ -49,6 +49,18 @@ func NewEventWatcher(clientset *kubernetes.Clientset, resource string, eventType
 	}
 }
 
+func (w *EventWatcher) handleEvent(obj interface{}) {
+	object, ok := obj.(*unstructured.Unstructured)
+	if !ok {
+		// Handle the case where the object is not an unstructured.Unstructured
+		return
+	}
+
+	if w.callback != nil {
+		w.callback(object)
+	}
+}
+
 // Run starts the event watcher and blocks until an error occurs.
 func (w *EventWatcher) Run(ctx context.Context) error {
 	informerFactory := informers.NewSharedInformerFactoryWithOptions(w.clientset, 0, informers.WithNamespace(v1.NamespaceAll))
@@ -57,15 +69,7 @@ func (w *EventWatcher) Run(ctx context.Context) error {
 	informer := genericInformer.Informer()
 
 	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		w.eventType: func(obj interface{}) {
-			object, ok := obj.(*unstructured.Unstructured)
-			if !ok {
-				return
-			}
-			if w.callback != nil {
-				w.callback(object)
-			}
-		},
+		w.eventType: w.handleEvent,
 	})
 
 	informerFactory.Start(ctx.Done())
