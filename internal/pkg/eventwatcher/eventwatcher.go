@@ -3,7 +3,7 @@ package eventwatcher
 import (
 	"fmt"
 
-	v1 "k8s.io/api/core/v1"
+	coreinformers "k8s.io/api/core/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
@@ -20,7 +20,7 @@ type EventHandler func(event Event)
 // EventController is our generic controller framework
 type EventController struct {
 	informerFactory informers.SharedInformerFactory
-	nodeInformer    informerFactory.NodeInformer
+	nodeInformer    coreinformers.NodeInformer
 	eventHandlers   map[string][]EventHandler
 }
 
@@ -41,7 +41,7 @@ func (c *EventController) RegisterHandler(eventType string, handler EventHandler
 // Run starts the controller's informers and listens for events
 func (c *EventController) Run(stopCh <-chan struct{}) error {
 	c.informerFactory.Start(stopCh)
-	if !cache.WaitForCacheSync(stopCh, c.informerFactory.WaitForCacheSync()) {
+	if !cache.WaitForCacheSync(stopCh, c.nodeInformer.Informer().HasSynced) {
 		klog.V(4).Info("Failed to sync")
 		return fmt.Errorf("Failed to sync")
 	}
@@ -64,7 +64,7 @@ func (c *EventController) Run(stopCh <-chan struct{}) error {
 
 				// Dispatch each event
 				for _, obj := range events {
-					node, ok := obj.(*v1.Node)
+					node, ok := obj.(*coreinformers.Node)
 					if !ok {
 						continue // Skip if not a Node event
 					}
