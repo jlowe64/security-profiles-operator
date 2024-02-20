@@ -1,83 +1,96 @@
-/*
-Copyright 2020 The Kubernetes Authors.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 package eventwatcher
 
 import (
-	"context"
 	"fmt"
 
-	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/informers"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 )
 
-// EventCallback defines the function to be called when an event occurs.
-type EventCallback func(object *unstructured.Unstructured)
-
-// EventWatcher watches for events on a specified resource type.
-type EventWatcher struct {
-	clientset *kubernetes.Clientset
-	resource  string
-	eventType string
-	callback  EventCallback
+// GenericEvent is a representation of any Kubernetes event
+type Event interface {
+	Type() string // Type of event (e.g., "Added", "Updated", "Deleted")
+	Object() interface{}
 }
 
-// NewEventWatcher creates a new EventWatcher.
-func NewEventWatcher(clientset *kubernetes.Clientset, resource string, eventType string, callback EventCallback) *EventWatcher {
-	return &EventWatcher{
-		clientset: clientset,
-		resource:  resource,
-		eventType: eventType,
-		callback:  callback,
+// EventHandler is a type alias for an event handling function
+type EventHandler func(event Event)
+
+// EventController is our generic controller framework
+type EventController struct {
+	informerFactory informers.SharedInformerFactory
+	eventHandlers   map[string][]EventHandler
+}
+
+// NewEventController creates a new EventController
+func NewEventController(informerFactory informers.SharedInformerFactory) *EventController {
+	return &EventController{
+		informerFactory: informerFactory,
+		eventHandlers:   make(map[string][]EventHandler),
 	}
 }
 
-func (w *EventWatcher) handleEvent(obj interface{}) {
-	object, ok := obj.(*unstructured.Unstructured)
-	if !ok {
-		return
+// RegisterHandler registers an event handler for a given event type
+func (c *EventController) RegisterHandler(eventType string, handler EventHandler) {
+	c.eventHandlers[eventType] = append(c.eventHandlers[eventType], handler)
+}
+
+// Run starts the controller's informers and listens for events
+func (c *EventController) Run(stopCh chan struct{}) error {
+	c.informerFactory.Start(stopCh)
+	if !cache.WaitForCacheSync(stopCh, c.informerFactory.WaitForCacheSync()) {
+		return fmt.Errorf("failed to sync")
 	}
 
-	if w.callback != nil {
-		w.callback(object)
+	for {
+		// ... Event dispatch here
 	}
 }
 
-// Run starts the event watcher and blocks until an error occurs.
-func (w *EventWatcher) Run(ctx context.Context) error {
-	informerFactory := informers.NewSharedInformerFactoryWithOptions(w.clientset, 0, informers.WithNamespace(v1.NamespaceAll))
-	resource := schema.GroupVersionResource{Group: "", Version: "v1", Resource: w.resource}
-	genericInformer, _ := informerFactory.ForResource(resource)
-	informer := genericInformer.Informer()
+/*
+// --- Example: Pod Event Handling ---
 
-	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		w.eventType: w.handleEvent,
-	})
-
-	informerFactory.Start(ctx.Done())
-	defer func() {
-		for _, startedInformer := range informerFactory.WaitForCacheSync(ctx.Done()) {
-			startedInformer.Stop()
-		}
-	}()
-
-	<-ctx.Done()
-	return fmt.Errorf("EventWatcher: context canceled")
+// PodEvent is a typed representation of a Pod-related event
+type PodEvent struct {
+    Type string
+    Pod  *v1.Pod
 }
+
+// Type returns the event type
+func (pe PodEvent) Type() string {
+    return pe.Type
+}
+
+// Object returns the underlying object (Pod)
+func (pe PodEvent) Object() interface{} {
+    return pe.Pod
+}
+
+// Create Pod-specific event handler functions:
+func podAddHandler(event GenericEvent) {
+    podEvent := event.(PodEvent) // Typecast the generic event
+    klog.Infof("POD CREATED: %s/%s", podEvent.Pod.Namespace, podEvent.Pod.Name)
+}
+
+// (Similar handler functions for podUpdateHandler, podDeleteHandler)
+
+// ---- Usage (Within main function) -----
+
+controller, err := NewEventController(factory)
+if err != nil {
+    klog.Fatal(err)
+}
+
+podInformer := factory.Core().V1().Pods()
+podInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+    AddFunc: func(obj interface{}) {
+        pod := obj.(*v1.Pod)
+        controller.handleEvent(PodEvent{Type: "Added", Pod: pod})
+    },
+    // ... (Similar for UpdateFunc, DeleteFunc)
+})
+
+controller.RegisterHandler("Added", podAddHandler)
+// ... Register other pod handlers
+
+controller.Run(stop)
+*/
