@@ -43,7 +43,7 @@ func (c *EventController) RegisterHandler(eventType string, handler EventHandler
 // Run starts the controller's informers and listens for events
 func (c *EventController) Run(stopCh <-chan struct{}) error {
 	c.informerFactory.Start(stopCh)
-	if !cache.WaitForCacheSync(stopCh, informer.HasSynced) {
+	if !cache.WaitForCacheSync(stopCh, c.nodeInformer.HasSynced) {
 		klog.V(4).Info("Failed to sync")
 		return fmt.Errorf("Failed to sync")
 	}
@@ -72,10 +72,7 @@ func (c *EventController) Run(stopCh <-chan struct{}) error {
 
 					if node.DeletionTimestamp != nil {
 						// This is a deleted Node event; proceed with handling
-						c.handleEvent(Event{
-							Type:   "Deleted",
-							Object: node,
-						})
+						c.handleEvent(obj)
 						klog.Infof("Node Deleted: %s", node.Name)
 					}
 				}
