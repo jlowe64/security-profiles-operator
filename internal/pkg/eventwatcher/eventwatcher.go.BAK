@@ -1,83 +1,120 @@
-/*
-Copyright 2020 The Kubernetes Authors.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 package eventwatcher
 
 import (
-	"context"
+	"flag"
 	"fmt"
+	"os"
+	"path/filepath"
+	"time"
 
-	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/informers"
+	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
+	klog "k8s.io/klog/v2"
+
+	"k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/component-base/logs"
 )
 
-// EventCallback defines the function to be called when an event occurs.
-type EventCallback func(object *unstructured.Unstructured)
-
-// EventWatcher watches for events on a specified resource type.
-type EventWatcher struct {
-	clientset *kubernetes.Clientset
-	resource  string
-	eventType string
-	callback  EventCallback
+// PodLoggingController logs the name and namespace of pods that are added,
+// deleted, or updated
+type PodLoggingController struct {
+	informerFactory informers.SharedInformerFactory
+	podInformer     coreinformers.PodInformer
 }
 
-// NewEventWatcher creates a new EventWatcher.
-func NewEventWatcher(clientset *kubernetes.Clientset, resource string, eventType string, callback EventCallback) *EventWatcher {
-	return &EventWatcher{
-		clientset: clientset,
-		resource:  resource,
-		eventType: eventType,
-		callback:  callback,
+// Run starts shared informers and waits for the shared informer cache to
+// synchronize.
+func (c *PodLoggingController) Run(stopCh chan struct{}) error {
+	// Starts all the shared informers that have been created by the factory so
+	// far.
+	c.informerFactory.Start(stopCh)
+	// wait for the initial synchronization of the local cache.
+	if !cache.WaitForCacheSync(stopCh, c.podInformer.Informer().HasSynced) {
+		return fmt.Errorf("failed to sync")
 	}
+	return nil
 }
 
-func (w *EventWatcher) handleEvent(obj interface{}) {
-	object, ok := obj.(*unstructured.Unstructured)
-	if !ok {
-		return
-	}
-
-	if w.callback != nil {
-		w.callback(object)
-	}
+func (c *PodLoggingController) podAdd(obj interface{}) {
+	pod := obj.(*v1.Pod)
+	klog.Infof("POD CREATED: %s/%s", pod.Namespace, pod.Name)
 }
 
-// Run starts the event watcher and blocks until an error occurs.
-func (w *EventWatcher) Run(ctx context.Context) error {
-	informerFactory := informers.NewSharedInformerFactoryWithOptions(w.clientset, 0, informers.WithNamespace(v1.NamespaceAll))
-	resource := schema.GroupVersionResource{Group: "", Version: "v1", Resource: w.resource}
-	genericInformer, _ := informerFactory.ForResource(resource)
-	informer := genericInformer.Informer()
+func (c *PodLoggingController) podUpdate(old, new interface{}) {
+	oldPod := old.(*v1.Pod)
+	newPod := new.(*v1.Pod)
+	klog.Infof(
+		"POD UPDATED. %s/%s %s",
+		oldPod.Namespace, oldPod.Name, newPod.Status.Phase,
+	)
+}
 
-	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		w.eventType: w.handleEvent,
-	})
+func (c *PodLoggingController) podDelete(obj interface{}) {
+	pod := obj.(*v1.Pod)
+	klog.Infof("POD DELETED: %s/%s", pod.Namespace, pod.Name)
+}
 
-	informerFactory.Start(ctx.Done())
-	defer func() {
-		for _, startedInformer := range informerFactory.WaitForCacheSync(ctx.Done()) {
-			startedInformer.Stop()
-		}
-	}()
+// NewPodLoggingController creates a PodLoggingController
+func NewPodLoggingController(informerFactory informers.SharedInformerFactory) (*PodLoggingController, error) {
+	podInformer := informerFactory.Core().V1().Pods()
 
-	<-ctx.Done()
-	return fmt.Errorf("EventWatcher: context canceled")
+	c := &PodLoggingController{
+		informerFactory: informerFactory,
+		podInformer:     podInformer,
+	}
+	_, err := podInformer.Informer().AddEventHandler(
+		// Your custom resource event handlers.
+		cache.ResourceEventHandlerFuncs{
+			// Called on creation
+			AddFunc: c.podAdd,
+			// Called on resource update and every resyncPeriod on existing resources.
+			UpdateFunc: c.podUpdate,
+			// Called on resource deletion.
+			DeleteFunc: c.podDelete,
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return c, nil
+}
+
+var kubeconfig string
+
+func init() {
+	flag.StringVar(&kubeconfig, "kubeconfig", filepath.Join(os.Getenv("HOME"), ".kube", "config"), "absolute path to the kubeconfig file")
+}
+
+func main() {
+	flag.Parse()
+	logs.InitLogs()
+	defer logs.FlushLogs()
+
+	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		klog.Fatal(err)
+	}
+
+	factory := informers.NewSharedInformerFactory(clientset, time.Hour*24)
+	controller, err := NewPodLoggingController(factory)
+	if err != nil {
+		klog.Fatal(err)
+	}
+
+	stop := make(chan struct{})
+	defer close(stop)
+	err = controller.Run(stop)
+	if err != nil {
+		klog.Fatal(err)
+	}
+	select {}
 }

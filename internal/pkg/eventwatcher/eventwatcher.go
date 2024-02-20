@@ -1,94 +1,47 @@
 package eventwatcher
 
-import (
-	"fmt"
-
+import {
 	"k8s.io/client-go/informers"
 	coreinformers "k8s.io/client-go/informers/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/klog/v2"
-)
-
-type Event interface {
-	Type() string        // Type of event (e.g., "Added", "Updated", "Deleted")
-	Object() interface{} // The underlying Kubernetes object
 }
 
-// EventHandler is a type alias for an event handling function
-type EventHandler func(event Event)
-
-// EventController is our generic controller framework
-type EventController struct {
+// NodeLoggingController is a controller that watches for node events and logs them.
+type NodeLoggingController struct {
 	informerFactory informers.SharedInformerFactory
 	nodeInformer    coreinformers.NodeInformer
-	informers       map[string]cache.SharedIndexInformer
-	eventHandlers   map[string][]EventHandler
 }
 
-// NewEventController creates a new EventController
-func NewEventController(informerFactory informers.SharedInformerFactory) *EventController {
-	return &EventController{
-		informerFactory: informerFactory,
-		nodeInformer:    informerFactory.Core().V1().Nodes(),
-		informers:       make(map[string]cache.SharedIndexInformer),
-		eventHandlers:   make(map[string][]EventHandler),
-	}
-}
-
-// RegisterHandler registers an event handler for a given event type
-func (c *EventController) RegisterHandler(eventType string, handler EventHandler) {
-	c.eventHandlers[eventType] = append(c.eventHandlers[eventType], handler)
-}
-
-// Run starts the controller's informers and listens for events
-func (c *EventController) Run(stopCh <-chan struct{}) error {
+func (c *NodeLoggingController) Run(stopCh chan struct{}) error {
 	c.informerFactory.Start(stopCh)
-	if !cache.WaitForCacheSync(stopCh, c.nodeInformer.HasSynced) {
-		klog.V(4).Info("Failed to sync")
+
+	if !cache.WaitForCacheSync(stopCh, c.nodeInformer.Informer().HasSynced) {
 		return fmt.Errorf("Failed to sync")
 	}
-
-	for {
-		select {
-		case <-stopCh:
-			return nil // Exit if the stop signal is received
-		default:
-			for informerType, informer := range c.informers {
-				// Check if the informer's cache has synced
-				if !cache.WaitForCacheSync(stopCh, c.informers["nodes"].HasSynced) {
-					klog.V(4).Info("Informer not synced, waiting...", informerType)
-					continue
-				}
-
-				// Use informer.GetStore().List() or a similar method to get the events
-				events := informer.GetStore().List()
-
-				// Dispatch each event
-				for _, obj := range events {
-					node, ok := obj.(*coreinformers.Node)
-					if !ok {
-						continue // Skip if not a Node event
-					}
-
-					if node.DeletionTimestamp != nil {
-						// This is a deleted Node event; proceed with handling
-						c.handleEvent(obj)
-						klog.Infof("Node Deleted: %s", node.Name)
-					}
-				}
-			}
-		}
-	}
+	return nil
 }
 
-// handleEvent is a helper to dispatch events to registered handlers
-func (c *EventController) handleEvent(event Event) {
-	handlers, ok := c.eventHandlers[event.Type()]
-	if !ok {
-		return // No handlers registered for this event type
+func (c *NodeLoggingController) nodeDelete(obj interface{}) {
+	node := obj.(*v1.Node)
+	klog.Infof("Node Deleted: ", node.ObjectMeta.Name)
+}
+
+func NewNodeLoggingController(informerFactory informers.SharedInformerFactory) (*NodeLoggingController, error) {
+	nodeInformer := informerFactory.Core().V1().Nodes()
+
+	c := &NodeLoggingController{
+		informerFactory: informerFactory,
+		nodeInformer:     nodeInformer,
+	}
+	_, err := nodeInformer.Informer().AddEventHandler(
+		cache.ResourceEventHandlerFuncs{
+			DeleteFunc: c.nodeDelete,
+		},
+	)
+	if err != nil {
+		return nil, err
 	}
 
-	for _, handler := range handlers {
-		handler(event)
-	}
+	return c, nil
 }

@@ -21,13 +21,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"time"
 
-	v1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -35,7 +32,6 @@ import (
 	"sigs.k8s.io/security-profiles-operator/api/profilerecording/v1alpha1"
 	secprofnodestatusv1alpha1 "sigs.k8s.io/security-profiles-operator/api/secprofnodestatus/v1alpha1"
 	"sigs.k8s.io/security-profiles-operator/internal/pkg/config"
-	"sigs.k8s.io/security-profiles-operator/internal/pkg/eventwatcher"
 	"sigs.k8s.io/security-profiles-operator/internal/pkg/util"
 )
 
@@ -48,7 +44,6 @@ type StatusClient struct {
 	nodeName        string
 	finalizerString string
 	client          client.Client
-	nodeInformer    eventwatcher.NodeInformer
 }
 
 func NewForProfile(pol profilebase.SecurityProfileBase, c client.Client) (*StatusClient, error) {
@@ -56,36 +51,12 @@ func NewForProfile(pol profilebase.SecurityProfileBase, c client.Client) (*Statu
 	if !ok {
 		return nil, errors.New("cannot determine node name")
 	}
-	factory := informers.NewSharedInformerFactory(c, time.Hour*24) // Adjust resync time if needed
-	controller := eventwatcher.NewEventController(factory)
-	controller.RegisterHandler("Deleted", nodeDeletedHandler)
-	stopCh := make(chan struct{})
-	defer close(stopCh)
-	go func() {
-		if err := controller.Run(stopCh); err != nil {
-			klog.Error(err)
-		}
-	}()
 	return &StatusClient{
 		pol:             pol,
 		nodeName:        nodeName,
 		finalizerString: getFinalizerString(pol, nodeName),
 		client:          c,
-		nodeInformer:    factory.Core().V1().Nodes().Informer(),
 	}, nil
-}
-
-func nodeDeletedHandler(event eventwatcher.Event) {
-	node := event.Object().(*v1.Node)
-	klog.Infof("Node deleted: %s", node.Name)
-
-	if err := client.RemoveFinalizer(ctx); err != nil {
-		klog.Error(err)
-	}
-
-	if err := client.SetNodeStatus(ctx, secprofnodestatusv1alpha1.ProfileStateTerminating); err != nil {
-		klog.Error(err)
-	}
 }
 
 func (nsf *StatusClient) perNodeStatusName() string {
