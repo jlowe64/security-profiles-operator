@@ -31,7 +31,8 @@ import (
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/informers"
-	clientset "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -203,11 +204,18 @@ func (r *StatusReconciler) Reconcile(ctx context.Context, req reconcile.Request)
 	logger.V(config.VerboseLevel).Info("Setting the status to", "Status", lowestCommonState)
 
 	if r.eventWatcher == nil {
-		kubernetesInterface := clientset.Interface()
-		informerFactory := informers.NewSharedInformerFactory(kubernetesInterface, r.reconcileTimeout)
+		config, err := rest.InClusterConfig()
+		if err != nil {
+			return reconcile.Result{}, fmt.Errorf("issue getting cluster config: %w", err)
+		}
+		clientset, err := kubernetes.NewForConfig(config)
+		if err != nil {
+			return reconcile.Result{}, fmt.Errorf("issue creating clientset: %w", err)
+		}
+		informerFactory := informers.NewSharedInformerFactory(clientset, reconcileTimeout)
 		eventWatcher, err := eventwatcher.NewNodeLoggingController(informerFactory)
 		if err != nil {
-			return reconcile.Result{}, fmt.Errorf("Creating event watcher: %w", err)
+			return reconcile.Result{}, fmt.Errorf("creating event watcher: %w", err)
 		}
 		r.eventWatcher = eventWatcher
 
