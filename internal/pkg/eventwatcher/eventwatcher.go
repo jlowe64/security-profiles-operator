@@ -20,7 +20,7 @@ type EventHandler func(event Event)
 // EventController is our generic controller framework
 type EventController struct {
 	informerFactory informers.SharedInformerFactory
-	nodeInformer    coreinformers.NodeInformer
+	nodeInformer    v1.NodeInformer
 	eventHandlers   map[string][]EventHandler
 }
 
@@ -41,7 +41,7 @@ func (c *EventController) RegisterHandler(eventType string, handler EventHandler
 // Run starts the controller's informers and listens for events
 func (c *EventController) Run(stopCh chan struct{}) error {
 	c.informerFactory.Start(stopCh)
-	if !cache.WaitForCacheSync(stopCh, c.informerFactory.WaitForCacheSync()) {
+	if !cache.WaitForCacheSync(stopCh, c.informerFactory["nodes"].WaitForCacheSync()) {
 		klog.V(4).Info("Failed to sync")
 		return fmt.Errorf("Failed to sync")
 	}
