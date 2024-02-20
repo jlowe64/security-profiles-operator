@@ -52,7 +52,7 @@ func (c *EventController) Run(stopCh <-chan struct{}) error {
 			return nil // Exit if the stop signal is received
 		default:
 			// Iterate over informers (you'll likely have multiple of these)
-			for informerType, informer := range c.informerFactory {
+			for informerType, informer := range c.informerFactory.Informers() {
 				// Check if the informer's cache has synced
 				if !informer.HasSynced() {
 					klog.V(4).Info("Informer not synced, waiting...", informerType)
