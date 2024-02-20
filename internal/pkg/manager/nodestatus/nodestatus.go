@@ -31,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/informers"
+	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -113,25 +114,6 @@ func (r *StatusReconciler) Reconcile(ctx context.Context, req reconcile.Request)
 
 	logger := r.log.WithValues("nodeStatus", req.Name, "namespace", req.Namespace)
 	logger.V(config.VerboseLevel).Info("Reconciling node status")
-
-	if r.eventWatcher == nil {
-		informerFactory := informers.NewSharedInformerFactory(r.client, reconcileTimeout)
-		eventWatcher, err := eventwatcher.NewNodeLoggingController(informerFactory)
-		if err != nil {
-			return reconcile.Result{}, fmt.Errorf("Creating event watcher: %w", err)
-		}
-		r.eventWatcher = eventWatcher
-
-		// Start the event watcher
-		stopCh := make(chan struct{})
-		go func() {
-			defer close(stopCh)
-			err := r.eventWatcher.Run(stopCh)
-			if err != nil {
-				fmt.Errorf("Event watcher exited with error: %s", err)
-			}
-		}()
-	}
 
 	// get the status to be reconciled
 	instance := &statusv1alpha1.SecurityProfileNodeStatus{}
@@ -219,6 +201,26 @@ func (r *StatusReconciler) Reconcile(ctx context.Context, req reconcile.Request)
 		lowestCommonState = statusv1alpha1.LowerOfTwoStates(lowestCommonState, nodeStatusList.Items[i].Status)
 	}
 	logger.V(config.VerboseLevel).Info("Setting the status to", "Status", lowestCommonState)
+
+	if r.eventWatcher == nil {
+		kubernetesInterface := clientset.Interface()
+		informerFactory := informers.NewSharedInformerFactory(kubernetesInterface, r.reconcileTimeout)
+		eventWatcher, err := eventwatcher.NewNodeLoggingController(informerFactory)
+		if err != nil {
+			return reconcile.Result{}, fmt.Errorf("Creating event watcher: %w", err)
+		}
+		r.eventWatcher = eventWatcher
+
+		// Start the event watcher
+		stopCh := make(chan struct{})
+		go func() {
+			defer close(stopCh)
+			err := r.eventWatcher.Run(stopCh)
+			if err != nil {
+				fmt.Errorf("Event watcher exited with error: %s", err)
+			}
+		}()
+	}
 
 	return r.reconcileStatus(ctx, prof, lowestCommonState, lprof)
 }
