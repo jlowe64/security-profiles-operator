@@ -1,13 +1,16 @@
 package eventwatcher
 
-import {
-	"k8s.io/client-go/informers"
-	coreinformers "k8s.io/client-go/informers/core/v1"
-	v1 "k8s.io/api/core/v1"
-	"k8s.io/client-go/tools/cache"
-}
+import (
+	"fmt"
 
-// NodeLoggingController is a controller that watches for node events and logs them.
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/informers"
+	"k8s.io/client-go/tools/cache"
+	"k8s.io/klog/v2"
+
+	coreinformers "k8s.io/client-go/informers/core/v1"
+)
+
 type NodeLoggingController struct {
 	informerFactory informers.SharedInformerFactory
 	nodeInformer    coreinformers.NodeInformer
@@ -32,7 +35,7 @@ func NewNodeLoggingController(informerFactory informers.SharedInformerFactory) (
 
 	c := &NodeLoggingController{
 		informerFactory: informerFactory,
-		nodeInformer:     nodeInformer,
+		nodeInformer:    nodeInformer,
 	}
 	_, err := nodeInformer.Informer().AddEventHandler(
 		cache.ResourceEventHandlerFuncs{
