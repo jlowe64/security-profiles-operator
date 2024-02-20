@@ -3,13 +3,15 @@ package eventwatcher
 import (
 	"fmt"
 
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/informers"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/klog/v2"
 )
 
-// GenericEvent is a representation of any Kubernetes event
 type Event interface {
-	Type() string // Type of event (e.g., "Added", "Updated", "Deleted")
-	Object() interface{}
+	Type() string        // Type of event (e.g., "Added", "Updated", "Deleted")
+	Object() interface{} // The underlying Kubernetes object
 }
 
 // EventHandler is a type alias for an event handling function
@@ -18,6 +20,7 @@ type EventHandler func(event Event)
 // EventController is our generic controller framework
 type EventController struct {
 	informerFactory informers.SharedInformerFactory
+	nodeInformer    coreinformers.NodeInformer
 	eventHandlers   map[string][]EventHandler
 }
 
@@ -25,6 +28,7 @@ type EventController struct {
 func NewEventController(informerFactory informers.SharedInformerFactory) *EventController {
 	return &EventController{
 		informerFactory: informerFactory,
+		nodeInformer:    informerFactory.Core().V1().Nodes(),
 		eventHandlers:   make(map[string][]EventHandler),
 	}
 }
@@ -38,59 +42,55 @@ func (c *EventController) RegisterHandler(eventType string, handler EventHandler
 func (c *EventController) Run(stopCh chan struct{}) error {
 	c.informerFactory.Start(stopCh)
 	if !cache.WaitForCacheSync(stopCh, c.informerFactory.WaitForCacheSync()) {
-		return fmt.Errorf("failed to sync")
+		klog.V(4).Info("Failed to sync")
+		return fmt.Errorf("Failed to sync")
 	}
 
 	for {
-		// ... Event dispatch here
+		select {
+		case <-stopCh:
+			return nil // Exit if the stop signal is received
+		default:
+			// Iterate over informers (you'll likely have multiple of these)
+			for informerType, informer := range c.informers {
+				// Check if the informer's cache has synced
+				if !informer.HasSynced() {
+					klog.V(4).Info("Informer not synced, waiting...", informerType)
+					continue
+				}
+
+				// Use informer.GetStore().List() or a similar method to get the events
+				events := informer.GetStore().List()
+
+				// Dispatch each event
+				for _, obj := range events {
+					node, ok := obj.(*v1.Node)
+					if !ok {
+						continue // Skip if not a Node event
+					}
+
+					if node.DeletionTimestamp != nil {
+						// This is a deleted Node event; proceed with handling
+						controller.handleEvent(Event{
+							Type:   "Deleted",
+							Object: node,
+						})
+						klog.Infof("Node Deleted: %s", node.Name)
+					}
+				}
+			}
+		}
 	}
 }
 
-/*
-// --- Example: Pod Event Handling ---
+// handleEvent is a helper to dispatch events to registered handlers
+func (c *EventController) handleEvent(event Event) {
+	handlers, ok := c.eventHandlers[event.Type()]
+	if !ok {
+		return // No handlers registered for this event type
+	}
 
-// PodEvent is a typed representation of a Pod-related event
-type PodEvent struct {
-    Type string
-    Pod  *v1.Pod
+	for _, handler := range handlers {
+		handler(event)
+	}
 }
-
-// Type returns the event type
-func (pe PodEvent) Type() string {
-    return pe.Type
-}
-
-// Object returns the underlying object (Pod)
-func (pe PodEvent) Object() interface{} {
-    return pe.Pod
-}
-
-// Create Pod-specific event handler functions:
-func podAddHandler(event GenericEvent) {
-    podEvent := event.(PodEvent) // Typecast the generic event
-    klog.Infof("POD CREATED: %s/%s", podEvent.Pod.Namespace, podEvent.Pod.Name)
-}
-
-// (Similar handler functions for podUpdateHandler, podDeleteHandler)
-
-// ---- Usage (Within main function) -----
-
-controller, err := NewEventController(factory)
-if err != nil {
-    klog.Fatal(err)
-}
-
-podInformer := factory.Core().V1().Pods()
-podInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-    AddFunc: func(obj interface{}) {
-        pod := obj.(*v1.Pod)
-        controller.handleEvent(PodEvent{Type: "Added", Pod: pod})
-    },
-    // ... (Similar for UpdateFunc, DeleteFunc)
-})
-
-controller.RegisterHandler("Added", podAddHandler)
-// ... Register other pod handlers
-
-controller.Run(stop)
-*/

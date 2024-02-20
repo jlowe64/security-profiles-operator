@@ -21,11 +21,13 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"time"
 
+	v1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -46,7 +48,7 @@ type StatusClient struct {
 	nodeName        string
 	finalizerString string
 	client          client.Client
-	watcher         *eventwatcher.EventWatcher
+	nodeInformer    eventwatcher.NodeInformer
 }
 
 func NewForProfile(pol profilebase.SecurityProfileBase, c client.Client) (*StatusClient, error) {
@@ -54,23 +56,36 @@ func NewForProfile(pol profilebase.SecurityProfileBase, c client.Client) (*Statu
 	if !ok {
 		return nil, errors.New("cannot determine node name")
 	}
-
-	watcher, err := eventwatcher.NewEventWatcher(c, "nodes", "Deleted", func(obj *unstructured.Unstructured) {
-		fmt.Printf("Node %s has been deleted\n", obj.GetName())
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	go watcher.Run(context.Background())
-
+	factory := informers.NewSharedInformerFactory(c, time.Hour*24) // Adjust resync time if needed
+	controller := eventwatcher.NewEventController(factory)
+	controller.RegisterHandler("Deleted", nodeDeletedHandler)
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	go func() {
+		if err := controller.Run(stopCh); err != nil {
+			klog.Error(err)
+		}
+	}()
 	return &StatusClient{
 		pol:             pol,
 		nodeName:        nodeName,
 		finalizerString: getFinalizerString(pol, nodeName),
 		client:          c,
-		watcher:         watcher,
+		nodeInformer:    factory.Core().V1().Nodes().Informer(),
 	}, nil
+}
+
+func nodeDeletedHandler(event eventwatcher.Event) {
+	node := event.Object().(*v1.Node)
+	klog.Infof("Node deleted: %s", node.Name)
+
+	if err := client.RemoveFinalizer(ctx); err != nil {
+		klog.Error(err)
+	}
+
+	if err := client.SetNodeStatus(ctx, secprofnodestatusv1alpha1.ProfileStateTerminating); err != nil {
+		klog.Error(err)
+	}
 }
 
 func (nsf *StatusClient) perNodeStatusName() string {
@@ -183,7 +198,6 @@ func (nsf *StatusClient) Remove(ctx context.Context, c client.Client) error {
 		return fmt.Errorf("cannot remove nodeStatus for %s: %w", nsf.pol.GetName(), err)
 	}
 
-	nsf.watcher.Stop() // Stop the EventWatcher
 	return nil
 }
 
