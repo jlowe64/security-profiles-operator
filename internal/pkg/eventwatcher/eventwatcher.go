@@ -71,7 +71,7 @@ func (c *EventController) Run(stopCh <-chan struct{}) error {
 
 					if node.DeletionTimestamp != nil {
 						// This is a deleted Node event; proceed with handling
-						controller.handleEvent(Event{
+						c.handleEvent(Event{
 							Type:   "Deleted",
 							Object: node,
 						})
