@@ -21,6 +21,7 @@ type EventHandler func(event Event)
 type EventController struct {
 	informerFactory informers.SharedInformerFactory
 	nodeInformer    coreinformers.NodeInformer
+	informers       map[string]cache.SharedIndexInformer
 	eventHandlers   map[string][]EventHandler
 }
 
@@ -29,6 +30,7 @@ func NewEventController(informerFactory informers.SharedInformerFactory) *EventC
 	return &EventController{
 		informerFactory: informerFactory,
 		nodeInformer:    informerFactory.Core().V1().Nodes(),
+		informers:       make(map[string]cache.SharedIndexInformer),
 		eventHandlers:   make(map[string][]EventHandler),
 	}
 }
@@ -41,7 +43,7 @@ func (c *EventController) RegisterHandler(eventType string, handler EventHandler
 // Run starts the controller's informers and listens for events
 func (c *EventController) Run(stopCh <-chan struct{}) error {
 	c.informerFactory.Start(stopCh)
-	if !cache.WaitForCacheSync(stopCh, c.nodeInformer.Informer().HasSynced) {
+	if !cache.WaitForCacheSync(stopCh, informer.HasSynced) {
 		klog.V(4).Info("Failed to sync")
 		return fmt.Errorf("Failed to sync")
 	}
@@ -51,10 +53,9 @@ func (c *EventController) Run(stopCh <-chan struct{}) error {
 		case <-stopCh:
 			return nil // Exit if the stop signal is received
 		default:
-			// Iterate over informers (you'll likely have multiple of these)
-			for informerType, informer := range c.informerFactory.Informers() {
+			for informerType, informer := range c.informers {
 				// Check if the informer's cache has synced
-				if !informer.HasSynced() {
+				if !cache.WaitForCacheSync(stopCh, c.informers["nodes"].HasSynced) {
 					klog.V(4).Info("Informer not synced, waiting...", informerType)
 					continue
 				}
