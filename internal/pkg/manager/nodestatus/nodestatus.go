@@ -167,17 +167,10 @@ func (r *StatusReconciler) Reconcile(ctx context.Context, req reconcile.Request)
 		return reconcile.Result{RequeueAfter: dsWait}, nil
 	}
 
-	// When a spod deployment occurs:
-	nodes, err := util.GetNodeList(ctx, r.client)
-	// If current nodes are different from nodes in finalizers, Reconcile
-	if err != nil {
-		return reconcile.Result{}, fmt.Errorf("cannot get list of nodes: %w", err)
-	} else {
-		fmt.Printf("Node: %v\n", nodes)
-		/* err = util.AdjustFinalizers(r.client, nodeNames, []string{"profile1", "profile2", "profile3"}, "your-namespace", "your-object-kind")
-		if err != nil {
-			return reconcile.Result{}, err
-		}*/
+	// make sure statuses are equal
+	diffStatuses := util.CompareFinalizers(ctx, r.client)
+	if diffStatuses {
+		logger.Info("finalizers and nodeNames are different, need to reconcile")
 	}
 
 	// make sure we have all the statuses already

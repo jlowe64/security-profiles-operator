@@ -79,13 +79,25 @@ func GetNodeList(ctx context.Context, client client.Client) ([]string, error) {
 	return nodeNames, nil
 }
 
-func GetFinalizersFromSeccompProfile(profile *seccompprofileapi.SeccompProfile) []string {
-	return profile.GetFinalizers()
+func GetFinalizersFromSeccompProfile(profile *seccompprofileapi.SeccompProfile) ([]string, error) {
+	finalizers := profile.GetFinalizers()
+	if finalizers == nil {
+		return nil, fmt.Errorf("finalizers is nil")
+	}
+	return finalizers, nil
 }
 
 // Compares nodeNames with finalizers from GetFinalizersFromSeccompProfile
 // If there are differences it returns true, else false
-func CompareFinalizers(nodeNames []string, finalizers []string) bool {
+func CompareFinalizers(ctx context.Context, client client.Client) bool {
+	nodeNames, err := GetNodeList(ctx, client)
+	if err != nil {
+		return false
+	}
+	finalizers, err := GetFinalizersFromSeccompProfile(&seccompprofileapi.SeccompProfile{})
+	if err != nil {
+		return false
+	}
 	// Convert lists to sets for efficient comparison
 	nodeSet := make(map[string]struct{}, len(nodeNames))
 	for _, name := range nodeNames {
@@ -112,42 +124,3 @@ func CompareFinalizers(nodeNames []string, finalizers []string) bool {
 
 	return false // No differences found
 }
-
-// GetSeccompProfiles retrieves all SeccompProfile resources and returns them as a list
-func GetSeccompProfiles(ctx context.Context, client client.Client) (*seccompprofileapi.SeccompProfileList, error) {
-	profilesList := &seccompprofileapi.SeccompProfileList{}
-	err := client.List(ctx, profilesList, nil)
-	if err != nil {
-		return nil, err
-	}
-	return profilesList, nil
-}
-
-func GetProfilesObjects(ctx context.Context, client client.Client, namespace, name, kind string) (metav1.Object, error) {
-	// Get profiles for seccomp, apparmor, and selinux
-	seccompprofile, err := GetSeccompProfiles(ctx, client)
-	if err != nil {
-		return nil, err
-	}
-	fmt.Print(seccompprofile)
-	return &seccompprofile.Items[0], nil
-}
-
-/*func ReconcileFinalizers(ctx context.Context, client client.Client, nodeNames []string, objNames []string, objNamespace, objKind string) error {
-	for _, objName := range objNames {
-		obj, err := GetKubernetesObject(ctx, client, objNamespace, objName, objKind)
-		if err != nil {
-			return err
-		}
-
-		currentFinalizers := GetFinalizers(ctx, client)
-		// ... Logic to compare nodeNames with currentFinalizers
-		// ... Update finalizers if necessary
-
-		err = UpdateKubernetesObject(clientset, obj)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}*/
