@@ -189,6 +189,8 @@ func (r *StatusReconciler) Reconcile(ctx context.Context, req reconcile.Request)
 		}
 		// if nodeName is not in currentNodeNames, remove it from the finalizers
 		for _, nodeStatus := range nodeStatusList.Items {
+			// print nodeStatus.NodeName
+			logger.Info("Print Node Name", "node", nodeStatus.NodeName)
 			if !util.StringInSlice(nodeStatus.NodeName, currentNodeNames) {
 				// Found a finalizer for a node that doesn't exist
 				logger.Info("Removing finalizer for node", "node", nodeStatus.NodeName)
