@@ -27,10 +27,6 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	// apparmorapi "sigs.k8s.io/security-profiles-operator/api/apparmorprofile/v1alpha1"
-
-	// selxv1alpha2 "sigs.k8s.io/security-profiles-operator/api/selinuxprofile/v1alpha2"
 	statusv1alpha1 "sigs.k8s.io/security-profiles-operator/api/secprofnodestatus/v1alpha1"
 )
 
@@ -80,36 +76,28 @@ func GetNodeList(ctx context.Context, client client.Client) ([]string, error) {
 	return nodeNames, nil
 }
 
-// Compares nodeNames with finalizers from GetFinalizersFromSeccompProfile
-// If there are differences it returns true, else false
-func CompareFinalizers(ctx context.Context, nodeStatusList *statusv1alpha1.SecurityProfileNodeStatusList, client client.Client) (bool, error) {
-	nodeNames, err := GetNodeList(ctx, client)
+func FinalizersMatchCurrentNodes(ctx context.Context,
+	client client.Client, nodeStatusList *statusv1alpha1.SecurityProfileNodeStatusList) bool {
+	// Obtain a list of current node names through a Kubernetes API call
+	currentNodeNames, err := GetNodeList(ctx, client)
 	if err != nil {
-		return false, err
-	}
-	// Convert lists to sets for efficient comparison
-	nodeSet := make(map[string]struct{}, len(nodeNames))
-	for _, name := range nodeNames {
-		nodeSet[name] = struct{}{}
+		return false
 	}
 
-	nodeStatusListSet := make(map[string]struct{}, len(nodeStatusList.Items))
-	for _, finalizer := range nodeStatusList.Items {
-		nodeStatusListSet[finalizer.NodeName] = struct{}{}
-	}
-
-	// Check for differences using set operations
-	for node := range nodeSet {
-		if _, exists := nodeStatusListSet[node]; !exists {
-			return true, nil // Node exists in nodeNames but not in finalizers
+	for _, nodeStatus := range nodeStatusList.Items {
+		if !StringInSlice(nodeStatus.Name, currentNodeNames) {
+			// Found a finalizer for a node that doesn't exist
+			return false
 		}
 	}
+	return true
+}
 
-	for finalizer := range nodeStatusListSet {
-		if _, exists := nodeSet[finalizer]; !exists {
-			return true, nil // Finalizer exists in finalizers but not in nodeNames
+func StringInSlice(str string, list []string) bool {
+	for _, item := range list {
+		if str == item {
+			return true
 		}
 	}
-
-	return false, nil // No differences found
+	return false
 }
