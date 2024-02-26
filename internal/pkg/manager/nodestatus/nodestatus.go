@@ -167,14 +167,8 @@ func (r *StatusReconciler) Reconcile(ctx context.Context, req reconcile.Request)
 		return reconcile.Result{RequeueAfter: dsWait}, nil
 	}
 
-	// make sure statuses are equal
-	diffStatuses := util.CompareFinalizers(ctx, r.client)
-	if diffStatuses {
-		logger.Info("finalizers and nodeNames are different, need to reconcile")
-	}
-
 	// make sure we have all the statuses already
-	hasStatuses := len(nodeStatusList.Items)
+	/*hasStatuses := len(nodeStatusList.Items)
 	wantsStatuses := spodDS.Status.DesiredNumberScheduled
 	if wantsStatuses > int32(hasStatuses) {
 		logger.Info("Not updating policy: not all statuses are ready",
@@ -196,6 +190,27 @@ func (r *StatusReconciler) Reconcile(ctx context.Context, req reconcile.Request)
 			}
 		}
 		return reconcile.Result{Requeue: true}, nil
+	}*/
+
+	diffStatuses, err := util.CompareFinalizers(ctx, nodeStatusList, r.client)
+	if err != nil {
+		return reconcile.Result{}, fmt.Errorf("cannot compare finalizers: %w", err)
+	}
+
+	if !diffStatuses {
+		// If the finalizers are the same, we don't need to reconcile the status
+		logger.Info("finalizers are the same")
+		return reconcile.Result{}, nil
+	} else if diffStatuses {
+		// If the finalizers are different, we need to reconcile the status
+		logger.Info("finalizers are different")
+		nodeName, err := r.removeStatusForDeletedNode(ctx, nodeStatusList, lprof)
+		if err != nil {
+			return reconcile.Result{}, fmt.Errorf("cannot remove extra statuses: %w", err)
+		}
+		if nodeName != "" {
+			fmt.Printf("Removing finalizer from profile %s, node %s\n", prof.GetName(), nodeName)
+		}
 	}
 
 	lowestCommonState := statusv1alpha1.LowestState

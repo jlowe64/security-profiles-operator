@@ -2,8 +2,8 @@
 replicaCount: 3
 
 spoImage:
-  registry: gcr.io
-  repository: k8s-staging-sp-operator/security-profiles-operator
+  registry: localhost:5001
+  repository: security-profiles-operator
   tag: latest
 
 enableSelinux: false

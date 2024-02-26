@@ -29,8 +29,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	// apparmorapi "sigs.k8s.io/security-profiles-operator/api/apparmorprofile/v1alpha1"
-	seccompprofileapi "sigs.k8s.io/security-profiles-operator/api/seccompprofile/v1beta1"
+
 	// selxv1alpha2 "sigs.k8s.io/security-profiles-operator/api/selinuxprofile/v1alpha2"
+	statusv1alpha1 "sigs.k8s.io/security-profiles-operator/api/secprofnodestatus/v1alpha1"
 )
 
 func GetDynamicClient(client client.Client) (dynamic.Interface, error) {
@@ -79,24 +80,12 @@ func GetNodeList(ctx context.Context, client client.Client) ([]string, error) {
 	return nodeNames, nil
 }
 
-func GetFinalizersFromSeccompProfile(profile *seccompprofileapi.SeccompProfile) ([]string, error) {
-	finalizers := profile.GetFinalizers()
-	if finalizers == nil {
-		return nil, fmt.Errorf("finalizers is nil")
-	}
-	return finalizers, nil
-}
-
 // Compares nodeNames with finalizers from GetFinalizersFromSeccompProfile
 // If there are differences it returns true, else false
-func CompareFinalizers(ctx context.Context, client client.Client) bool {
+func CompareFinalizers(ctx context.Context, nodeStatusList *statusv1alpha1.SecurityProfileNodeStatusList, client client.Client) (bool, error) {
 	nodeNames, err := GetNodeList(ctx, client)
 	if err != nil {
-		return false
-	}
-	finalizers, err := GetFinalizersFromSeccompProfile(&seccompprofileapi.SeccompProfile{})
-	if err != nil {
-		return false
+		return false, err
 	}
 	// Convert lists to sets for efficient comparison
 	nodeSet := make(map[string]struct{}, len(nodeNames))
@@ -104,23 +93,23 @@ func CompareFinalizers(ctx context.Context, client client.Client) bool {
 		nodeSet[name] = struct{}{}
 	}
 
-	finalizerSet := make(map[string]struct{}, len(finalizers))
-	for _, finalizer := range finalizers {
-		finalizerSet[finalizer] = struct{}{}
+	nodeStatusListSet := make(map[string]struct{}, len(nodeStatusList.Items))
+	for _, finalizer := range nodeStatusList.Items {
+		nodeStatusListSet[finalizer.NodeName] = struct{}{}
 	}
 
 	// Check for differences using set operations
 	for node := range nodeSet {
-		if _, exists := finalizerSet[node]; !exists {
-			return true // Node exists in nodeNames but not in finalizers
+		if _, exists := nodeStatusListSet[node]; !exists {
+			return true, nil // Node exists in nodeNames but not in finalizers
 		}
 	}
 
-	for finalizer := range finalizerSet {
+	for finalizer := range nodeStatusListSet {
 		if _, exists := nodeSet[finalizer]; !exists {
-			return true // Finalizer exists in finalizers but not in nodeNames
+			return true, nil // Finalizer exists in finalizers but not in nodeNames
 		}
 	}
 
-	return false // No differences found
+	return false, nil // No differences found
 }
