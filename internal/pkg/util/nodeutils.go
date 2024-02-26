@@ -78,20 +78,20 @@ func GetNodeList(ctx context.Context, client client.Client) ([]string, error) {
 }
 
 func FinalizersMatchCurrentNodes(ctx context.Context,
-	client client.Client, nodeStatusList *statusv1alpha1.SecurityProfileNodeStatusList) bool {
+	client client.Client, nodeStatusList *statusv1alpha1.SecurityProfileNodeStatusList) (bool, error) {
 	// Obtain a list of current node names through a Kubernetes API call
 	currentNodeNames, err := GetNodeList(ctx, client)
 	if err != nil {
-		return false
+		return false, err
 	}
 
 	for _, nodeStatus := range nodeStatusList.Items {
 		if !StringInSlice(nodeStatus.Name, currentNodeNames) {
 			// Found a finalizer for a node that doesn't exist
-			return false
+			return false, nil
 		}
 	}
-	return true
+	return true, nil
 }
 
 func StringInSlice(str string, list []string) bool {

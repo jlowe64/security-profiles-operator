@@ -170,7 +170,7 @@ func (r *StatusReconciler) Reconcile(ctx context.Context, req reconcile.Request)
 	// make sure we have all the statuses already
 	hasStatuses := len(nodeStatusList.Items)
 	wantsStatuses := spodDS.Status.DesiredNumberScheduled
-	statusMatch := util.FinalizersMatchCurrentNodes(ctx, r.client, nodeStatusList)
+	statusMatch, err := util.FinalizersMatchCurrentNodes(ctx, r.client, nodeStatusList)
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("cannot compare statuses and finalizers: %w", err)
 	}
