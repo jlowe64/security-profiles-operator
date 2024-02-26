@@ -19,6 +19,7 @@ package util
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -95,7 +96,7 @@ func FinalizersMatchCurrentNodes(ctx context.Context,
 
 func StringInSlice(str string, list []string) bool {
 	for _, item := range list {
-		if str == item {
+		if strings.Contains(item, str) {
 			return true
 		}
 	}
