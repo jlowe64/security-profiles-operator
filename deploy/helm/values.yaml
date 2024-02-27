@@ -2,7 +2,7 @@
 replicaCount: 3
 
 spoImage:
-  registry: localhost:5001
+  registry: 419356813857.dkr.ecr.eu-west-1.amazonaws.com
   repository: security-profiles-operator
   tag: latest
 
