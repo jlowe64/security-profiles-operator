@@ -86,6 +86,8 @@ func FinalizersMatchCurrentNodes(ctx context.Context,
 	}
 
 	for _, nodeStatus := range nodeStatusList.Items {
+		fmt.Print("NodeStatus: ", nodeStatus.Name, "\n")
+		fmt.Printf("CurrentNodeNames: %v\n", currentNodeNames)
 		if !StringInSlice(nodeStatus.Name, currentNodeNames) {
 			// Found a finalizer for a node that doesn't exist
 			return false, nil
