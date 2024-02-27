@@ -197,14 +197,12 @@ image-arm64: ## Build the container image for arm64
 image-cross: ## Build and push the container image manifest
 	hack/image-cross.sh
 
-.PHONY: image-multiarch
+PHONY: image image-arm64 image-manifest
 PLATFORMS := linux/amd64,linux/arm64
 image-amd64: 
-    $(CONTAINER_RUNTIME) buildx build --platform linux/amd64 -t $(IMAGE):amd64 -f $(DOCKERFILE) --build-arg version=$(VERSION) . 
+    $(CONTAINER_RUNTIME) buildx build --platform linux/amd64 -t $(IMAGE):amd64 -f $(DOCKERFILE) --build-arg version=$(VERSION) .
 image-arm64: 
-    $(CONTAINER_RUNTIME) buildx build --platform linux/arm64 -t $(IMAGE):arm64 -f $(DOCKERFILE) --build-arg version=$(VERSION) .  
- 
-# Create manifest list (points to the architecture-specific images)
+    $(CONTAINER_RUNTIME) buildx build --platform linux/arm64 -t $(IMAGE):arm64 -f $(DOCKERFILE) --build-arg version=$(VERSION) .
 image-manifest: image-amd64 image-arm64
     $(CONTAINER_RUNTIME) manifest create --amend $(IMAGE):latest $(IMAGE):amd64 $(IMAGE):arm64
     $(CONTAINER_RUNTIME) manifest push $(IMAGE):latest
