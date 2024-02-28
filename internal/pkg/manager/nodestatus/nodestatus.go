@@ -192,11 +192,11 @@ func (r *StatusReconciler) Reconcile(ctx context.Context, req reconcile.Request)
 		return reconcile.Result{Requeue: true}, nil
 	}
 
-	statusMatch, err := util.FinalizersMatchCurrentNodes(ctx, r.client, nodeStatusList, logger)
+	statusMatch, err := util.FinalizersMatchCurrentNodes(ctx, r.client, nodeStatusList, hasStatuses, logger)
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("cannot compare statuses and finalizers: %w", err)
 	}
-	if !statusMatch {
+	if !statusMatch { // if the finalizers don't match the current nodes
 		// Get current list of nodes
 		currentNodeNames, err := util.GetNodeList(ctx, r.client)
 		if err != nil {
@@ -204,7 +204,7 @@ func (r *StatusReconciler) Reconcile(ctx context.Context, req reconcile.Request)
 		}
 		// if nodeName is not in currentNodeNames, remove it from the finalizers
 		for _, nodeStatus := range nodeStatusList.Items {
-			if !util.StringInSlice(nodeStatus.NodeName, currentNodeNames) { // string not in list
+			if !util.StringInSlice(currentNodeNames, nodeStatus.NodeName) { // string not in list
 				// Found a finalizer for a node that doesn't exist
 				logger.Info("removing finalizer for node", "node", nodeStatus.NodeName)
 				finalizerNodeString := util.GetFinalizerNodeString(nodeStatus.NodeName)
