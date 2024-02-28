@@ -38,7 +38,7 @@ jobs:
           sudo apt install -y libseccomp-dev libelf-dev libapparmor-dev
           sudo hack/install-libbpf.sh
       - run: make test-unit
-      - uses: codecov/codecov-action@e0b68c6749509c5f83f984dd99a76a1c1a231044
+      - uses: codecov/codecov-action@54bcd8715eee62d40e33596ef5e8f0f48dbbccab
         with:
           files: build/coverage.out
           flags: unittests
@@ -69,7 +69,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y vagrant virtualbox
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v3.5.2
-      - uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe
+      - uses: actions/download-artifact@87c55149d96e628cc2ef7e6fc2aab372015aec85
         with:
           name: image
           path: .
@@ -104,7 +104,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y vagrant virtualbox
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v3.5.2
-      - uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe
+      - uses: actions/download-artifact@87c55149d96e628cc2ef7e6fc2aab372015aec85
         with:
           name: image
           path: .
@@ -148,7 +148,7 @@ jobs:
         run: |
           ln -sf hack/ci/Vagrantfile-flatcar Vagrantfile
           vagrant box update
-      - uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe
+      - uses: actions/download-artifact@87c55149d96e628cc2ef7e6fc2aab372015aec85
         with:
           name: image
           path: .
@@ -180,7 +180,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y vagrant virtualbox
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v3.5.2
-      - uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe
+      - uses: actions/download-artifact@87c55149d96e628cc2ef7e6fc2aab372015aec85
         with:
           name: image
           path: .
