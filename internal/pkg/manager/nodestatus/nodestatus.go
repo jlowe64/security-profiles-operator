@@ -170,32 +170,12 @@ func (r *StatusReconciler) Reconcile(ctx context.Context, req reconcile.Request)
 	// make sure we have all the statuses already
 	hasStatuses := len(nodeStatusList.Items)
 	wantsStatuses := spodDS.Status.DesiredNumberScheduled
-	statusMatch, err := util.FinalizersMatchCurrentNodes(ctx, r.client, nodeStatusList)
-	if err != nil {
-		return reconcile.Result{}, fmt.Errorf("cannot compare statuses and finalizers: %w", err)
-	}
 
 	if wantsStatuses > int32(hasStatuses) {
 		logger.Info("Not updating policy: not all statuses are ready",
 			"has", hasStatuses, "wants", wantsStatuses)
 		// Don't reconcile again, let's just wait for another update
 		return reconcile.Result{}, nil
-	} else if !statusMatch {
-		// Get current list of nodes
-		currentNodeNames, err := util.GetNodeList(ctx, r.client)
-		if err != nil {
-			return reconcile.Result{}, fmt.Errorf("cannot get node list: %w", err)
-		}
-		// if nodeName is not in currentNodeNames, remove it from the finalizers
-		for _, nodeStatus := range nodeStatusList.Items {
-			if !util.StringInSlice(nodeStatus.NodeName, currentNodeNames) { // string not in list
-				// Found a finalizer for a node that doesn't exist
-				logger.Info("Removing finalizer for node", "node", nodeStatus.NodeName)
-				if err := util.RemoveFinalizer(ctx, r.client, instance, util.GetFinalizerNodeString(nodeStatus.NodeName)); err != nil {
-					return reconcile.Result{}, fmt.Errorf("cannot remove finalizer: %w", err)
-				}
-			}
-		}
 	} else if wantsStatuses < int32(hasStatuses) {
 		// this happens when nodes are removed from the cluster
 		logger.Info("Removing extra statuses", "has", hasStatuses, "wants", wantsStatuses)
@@ -211,6 +191,28 @@ func (r *StatusReconciler) Reconcile(ctx context.Context, req reconcile.Request)
 			}
 		}
 		return reconcile.Result{Requeue: true}, nil
+	}
+
+	statusMatch, err := util.FinalizersMatchCurrentNodes(ctx, r.client, nodeStatusList)
+	if err != nil {
+		return reconcile.Result{}, fmt.Errorf("cannot compare statuses and finalizers: %w", err)
+	}
+	if !statusMatch {
+		// Get current list of nodes
+		currentNodeNames, err := util.GetNodeList(ctx, r.client)
+		if err != nil {
+			return reconcile.Result{}, fmt.Errorf("cannot get node list: %w", err)
+		}
+		// if nodeName is not in currentNodeNames, remove it from the finalizers
+		for _, nodeStatus := range nodeStatusList.Items {
+			if !util.StringInSlice(nodeStatus.NodeName, currentNodeNames) { // string not in list
+				// Found a finalizer for a node that doesn't exist
+				logger.Info("Removing finalizer for node", "node", nodeStatus.NodeName)
+				if err := util.RemoveFinalizer(ctx, r.client, instance, util.GetFinalizerNodeString(nodeStatus.NodeName)); err != nil {
+					return reconcile.Result{}, fmt.Errorf("cannot remove finalizer: %w", err)
+				}
+			}
+		}
 	}
 
 	lowestCommonState := statusv1alpha1.LowestState
