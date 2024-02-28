@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/go-logr/logr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -78,7 +79,8 @@ func GetNodeList(ctx context.Context, client client.Client) ([]string, error) {
 }
 
 func FinalizersMatchCurrentNodes(ctx context.Context,
-	client client.Client, nodeStatusList *statusv1alpha1.SecurityProfileNodeStatusList) (bool, error) {
+	client client.Client, nodeStatusList *statusv1alpha1.SecurityProfileNodeStatusList,
+	logger logr.Logger) (bool, error) {
 	// Obtain a list of current node names through a Kubernetes API call
 	currentNodeNames, err := GetNodeList(ctx, client)
 	if err != nil {
@@ -86,8 +88,8 @@ func FinalizersMatchCurrentNodes(ctx context.Context,
 	}
 
 	for _, nodeStatus := range nodeStatusList.Items {
-		fmt.Print("NodeStatus: ", nodeStatus.Name, "\n")
-		fmt.Printf("CurrentNodeNames: %v\n", currentNodeNames)
+		logger.Info("nodeStatus name", "name", nodeStatus.Name)
+		logger.Info("currentNodeNames: %v\n", currentNodeNames)
 		if !StringInSlice(nodeStatus.Name, currentNodeNames) {
 			// Found a finalizer for a node that doesn't exist
 			return false, nil

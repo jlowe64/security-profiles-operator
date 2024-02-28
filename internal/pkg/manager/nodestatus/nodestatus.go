@@ -170,7 +170,6 @@ func (r *StatusReconciler) Reconcile(ctx context.Context, req reconcile.Request)
 	// make sure we have all the statuses already
 	hasStatuses := len(nodeStatusList.Items)
 	wantsStatuses := spodDS.Status.DesiredNumberScheduled
-
 	if wantsStatuses > int32(hasStatuses) {
 		logger.Info("Not updating policy: not all statuses are ready",
 			"has", hasStatuses, "wants", wantsStatuses)
@@ -193,7 +192,7 @@ func (r *StatusReconciler) Reconcile(ctx context.Context, req reconcile.Request)
 		return reconcile.Result{Requeue: true}, nil
 	}
 
-	statusMatch, err := util.FinalizersMatchCurrentNodes(ctx, r.client, nodeStatusList)
+	statusMatch, err := util.FinalizersMatchCurrentNodes(ctx, r.client, nodeStatusList, logger)
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("cannot compare statuses and finalizers: %w", err)
 	}
@@ -207,7 +206,10 @@ func (r *StatusReconciler) Reconcile(ctx context.Context, req reconcile.Request)
 		for _, nodeStatus := range nodeStatusList.Items {
 			if !util.StringInSlice(nodeStatus.NodeName, currentNodeNames) { // string not in list
 				// Found a finalizer for a node that doesn't exist
-				logger.Info("Removing finalizer for node", "node", nodeStatus.NodeName)
+				logger.Info("removing finalizer for node", "node", nodeStatus.NodeName)
+				finalizerNodeString := util.GetFinalizerNodeString(nodeStatus.NodeName)
+				logger.Info("finalizer node string", "finalizerString", finalizerNodeString)
+				logger.Info("sec prof node status", "instance", instance)
 				if err := util.RemoveFinalizer(ctx, r.client, instance, util.GetFinalizerNodeString(nodeStatus.NodeName)); err != nil {
 					return reconcile.Result{}, fmt.Errorf("cannot remove finalizer: %w", err)
 				}

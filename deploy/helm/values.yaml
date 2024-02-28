@@ -5,6 +5,9 @@ spoImage:
   registry: 419356813857.dkr.ecr.eu-west-1.amazonaws.com
   repository: security-profiles-operator
   tag: latest
+  #registry: registry.k8s.io
+  #repository: security-profiles-operator/security-profiles-operator
+  #tag: v0.8.1
 
 enableSelinux: false
 enableLogEnricher: false
