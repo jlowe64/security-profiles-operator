@@ -210,7 +210,7 @@ func (r *StatusReconciler) Reconcile(ctx context.Context, req reconcile.Request)
 				finalizerNodeString := util.GetFinalizerNodeString(nodeStatus.NodeName)
 				logger.Info("finalizer node string", "finalizerString", finalizerNodeString)
 				logger.Info("sec prof node status", "instance", instance)
-				if err := util.RemoveFinalizer(ctx, r.client, instance, util.GetFinalizerNodeString(nodeStatus.NodeName)); err != nil {
+				if err := util.RemoveFinalizer(ctx, r.client, instance, finalizerNodeString); err != nil {
 					return reconcile.Result{}, fmt.Errorf("cannot remove finalizer: %w", err)
 				}
 			}
