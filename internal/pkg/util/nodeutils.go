@@ -80,7 +80,7 @@ func GetNodeList(ctx context.Context, client client.Client) ([]string, error) {
 
 func FinalizersMatchCurrentNodes(ctx context.Context,
 	client client.Client, nodeStatusList *statusv1alpha1.SecurityProfileNodeStatusList,
-	numberOfStatues int,
+	numberOfStatuses int,
 	logger logr.Logger) (bool, error) {
 
 	// Obtain a list of current node names through a Kubernetes API call
@@ -88,14 +88,13 @@ func FinalizersMatchCurrentNodes(ctx context.Context,
 	if err != nil {
 		return false, err
 	}
-	if len(currentNodeNames) == numberOfStatues {
+	if len(currentNodeNames) != numberOfStatuses {
 		logger.Info("Wrong number of statuses",
-			"status number", numberOfStatues, "node number", len(currentNodeNames))
+			"status number", numberOfStatuses, "node number", len(currentNodeNames))
 	}
 
 	for _, nodeStatus := range nodeStatusList.Items {
 		logger.Info("nodeStatus nodeName", "nodeName", nodeStatus.NodeName)
-		logger.Info("currentNodeNames: %v\n", currentNodeNames)
 		nodeStatusName := GetFinalizerNodeString(nodeStatus.NodeName)
 		if StringInSlice(currentNodeNames, nodeStatusName) {
 			// We've found a matching node for this finalizer
