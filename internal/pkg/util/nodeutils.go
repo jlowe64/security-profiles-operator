@@ -88,15 +88,16 @@ func FinalizersMatchCurrentNodes(ctx context.Context,
 	if err != nil {
 		return false, err
 	}
+	for _, nodeName := range currentNodeNames {
+		logger.Info("Current Nodes", "nodeName", nodeName)
+	}
 	if len(currentNodeNames) != numberOfStatuses {
 		logger.Info("Wrong number of statuses",
 			"status number", numberOfStatuses, "node number", len(currentNodeNames))
 	}
 
 	for _, nodeStatus := range nodeStatusList.Items {
-		logger.Info("nodeStatus nodeName", "nodeName", nodeStatus.NodeName)
-		nodeStatusName := GetFinalizerNodeString(nodeStatus.NodeName)
-		if StringInSlice(currentNodeNames, nodeStatusName) {
+		if StringInSlice(currentNodeNames, nodeStatus.NodeName) {
 			// We've found a matching node for this finalizer
 			return true, nil
 		}
