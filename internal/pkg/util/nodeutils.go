@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/go-logr/logr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -79,21 +78,12 @@ func GetNodeList(ctx context.Context, client client.Client) ([]string, error) {
 }
 
 func FinalizersMatchCurrentNodes(ctx context.Context,
-	client client.Client, nodeStatusList *statusv1alpha1.SecurityProfileNodeStatusList,
-	numberOfStatuses int,
-	logger logr.Logger) (bool, error) {
+	client client.Client, nodeStatusList *statusv1alpha1.SecurityProfileNodeStatusList) (bool, error) {
 
 	// Obtain a list of current node names through a Kubernetes API call
 	currentNodeNames, err := GetNodeList(ctx, client)
 	if err != nil {
 		return false, err
-	}
-	for _, nodeName := range currentNodeNames {
-		logger.Info("Current Nodes", "nodeName", nodeName)
-	}
-	if len(currentNodeNames) != numberOfStatuses {
-		logger.Info("Wrong number of statuses",
-			"status number", numberOfStatuses, "node number", len(currentNodeNames))
 	}
 
 	for _, nodeStatus := range nodeStatusList.Items {

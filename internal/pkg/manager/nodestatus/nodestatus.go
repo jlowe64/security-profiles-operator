@@ -192,7 +192,7 @@ func (r *StatusReconciler) Reconcile(ctx context.Context, req reconcile.Request)
 		return reconcile.Result{Requeue: true}, nil
 	}
 
-	statusMatch, err := util.FinalizersMatchCurrentNodes(ctx, r.client, nodeStatusList, hasStatuses, logger)
+	statusMatch, err := util.FinalizersMatchCurrentNodes(ctx, r.client, nodeStatusList)
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("cannot compare statuses and finalizers: %w", err)
 	}
